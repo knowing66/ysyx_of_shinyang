@@ -15,9 +15,11 @@
 
 #include <isa.h>
 #include <cpu/cpu.h>
+#include <memory/paddr.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
+#include <memory/vaddr.h>
 
 static int is_batch_mode = false;
 
@@ -49,10 +51,21 @@ static int cmd_c(char *args) {
 
 
 static int cmd_q(char *args) {
+  nemu_state.state=NEMU_QUIT;
   return -1;
 }
 
+static int cmd_si(char *args);
+
 static int cmd_help(char *args);
+
+static int cmd_info(char *args);
+
+static int cmd_x(char *args);
+
+static int cmd_p(char *args);
+
+static int cmd_w(char *args);
 
 static struct {
   const char *name;
@@ -62,6 +75,11 @@ static struct {
   { "help", "Display information about all supported commands", cmd_help },
   { "c", "Continue the execution of the program", cmd_c },
   { "q", "Exit NEMU", cmd_q },
+  {"si","Execute the program for N step",cmd_si},
+  {"info","Print the val of regesiters on screen",cmd_info},
+  {"x","Examine Ram",cmd_x},
+  {"p","Evaluate expression",cmd_p},
+  {"w","Watch Point",cmd_w},
 
   /* TODO: Add more commands */
 
@@ -90,6 +108,102 @@ static int cmd_help(char *args) {
     printf("Unknown command '%s'\n", arg);
   }
   return 0;
+}
+
+static int cmd_si(char *args){
+  if(args!=NULL){
+    uint64_t N=*args-'0';
+    cpu_exec(N);
+
+  }
+  else{
+    cpu_exec(1);
+  }
+  return 0;
+}
+
+static int cmd_info(char *args){
+  if(*args=='r'){
+    isa_reg_display();
+  }
+  else if(*args=='w'){
+    wp_print();
+  }
+  return 0;
+}
+
+static int cmd_x(char *args){
+    unsigned int address;
+    int num;
+    char *nums4bits= strtok(args, " ");
+    char *args2 = nums4bits + strlen(nums4bits) + 1;
+    sscanf(args2,"%x",&address);
+    sscanf(nums4bits,"%x",&num);
+    for(int i=0;i<num;i++){
+      printf("0x%08x   =   0x%08x\n",address,vaddr_read(address,4));
+      address+=4;
+    }
+  return 0;
+}
+
+static int cmd_p(char *args){
+  bool *success=(bool *)malloc(sizeof(bool));
+  expr(args,success);
+  if(*success!=false){
+    printf("the result is %u\n",expr(args,success)) ;
+  }
+  return 0;
+  /*FILE *input_file = fopen("/home/shiyang/ics2023/nemu/tools/gen-expr/input", "r");
+    if (input_file == NULL) {
+        perror("Error opening input file");
+        return EXIT_FAILURE;
+    }
+
+    // 读取每一行并处理
+    char line[256]; // 假设每行不超过 256 个字符
+    while (fgets(line, sizeof(line), input_file) != NULL) {
+        // 从当前行中提取结果和表达式
+        unsigned result;
+        char expression[256];
+        if (sscanf(line, "%u %[^\n]", &result, expression) != 2) {
+            fprintf(stderr, "Error parsing line: %s\n", line);
+            continue;
+        }
+
+        // 在这里执行你的测试用例逻辑
+        // 例如，调用 expr() 函数处理表达式
+        bool *success=NULL;
+        if(result==expr(expression,success)){
+          printf("Result: %u, Expression: %s,right\n", result, expression);;
+        }
+        else{
+          printf("Result: %u, Expression: %s,wrong\n", result, expression);
+        }
+
+    }
+
+    // 关闭文件
+    fclose(input_file);*/
+    //return 0;
+}
+
+static int cmd_w(char *args){
+  bool success=false;
+  word_t val=expr(args,&success);
+
+  if(success==false){
+    assert(0);
+  }
+
+  WP *wp = new_wp();
+	if (wp == NULL) {
+		printf("No space to add an extra watchpoint!");
+		return 0;
+	}
+  strcpy(wp -> expr_of_wp, args);
+	wp -> oldval = val;
+	printf("Succefully add watchpoint NO.%d\n", wp -> NO);
+	return 0;
 }
 
 void sdb_set_batch_mode() {
