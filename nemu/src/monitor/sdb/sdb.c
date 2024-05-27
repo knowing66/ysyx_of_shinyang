@@ -65,6 +65,8 @@ static int cmd_x(char *args);
 
 static int cmd_p(char *args);
 
+static int cmd_pinx(char *args);
+
 static int cmd_w(char *args);
 
 static struct {
@@ -76,9 +78,10 @@ static struct {
   { "c", "Continue the execution of the program", cmd_c },
   { "q", "Exit NEMU", cmd_q },
   {"si","Execute the program for N step",cmd_si},
-  {"info","Print the val of regesiters on screen",cmd_info},
+  {"info","Print the val of regesiters or watchpoint",cmd_info},
   {"x","Examine Ram",cmd_x},
   {"p","Evaluate expression",cmd_p},
+  {"p/x","Evaluate expression",cmd_pinx},
   {"w","Watch Point",cmd_w},
 
   /* TODO: Add more commands */
@@ -133,17 +136,38 @@ static int cmd_info(char *args){
 }
 
 static int cmd_x(char *args){
-    unsigned int address;
+    //unsigned int address;
     int num;
     char *nums4bits= strtok(args, " ");
     char *args2 = nums4bits + strlen(nums4bits) + 1;
-    sscanf(args2,"%x",&address);
+    //sscanf(args2,"%x",&address);
     sscanf(nums4bits,"%x",&num);
+
+    bool success;
+    word_t expr_val=expr(args2,&success);
+    if(success==false){
+      printf("something wrong with expr");
+      assert(0);
+    }
+
     for(int i=0;i<num;i++){
-      printf("0x%08x   =   0x%08x\n",address,vaddr_read(address,4));
-      address+=4;
+      printf("0x%08x   =   0x%08x\n",expr_val,vaddr_read(expr_val,4));
+      expr_val+=4;
     }
   return 0;
+}
+
+static int cmd_pinx(char *args){
+    bool success;
+    word_t res=expr(args,&success);
+    if(success){
+      printf("the result is 0x%08x\n",res) ;
+    }
+    else{
+      printf("p/x expr failed");
+      assert(0);
+    }
+    return 0;
 }
 
 static int cmd_p(char *args){
@@ -197,7 +221,7 @@ static int cmd_w(char *args){
 
   WP *wp = new_wp();
 	if (wp == NULL) {
-		printf("No space to add an extra watchpoint!");
+		printf("No space to add an extra watchpoint!\n");
 		return 0;
 	}
   strcpy(wp -> expr_of_wp, args);
@@ -255,3 +279,4 @@ void init_sdb() {
   /* Initialize the watchpoint pool. */
   init_wp_pool();
 }
+
